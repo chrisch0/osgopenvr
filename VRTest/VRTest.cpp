@@ -17,6 +17,7 @@ public:
 		int cID = renderInfo.getContextID();
 		auto textureObject = leftTexture->getTextureObject(cID);
 		m_device->m_leftTextureID = (unsigned int)textureObject->id();
+		m_device->submitFrame();
 	}
 private:
 	osg::ref_ptr<OpenVRDevice> m_device;
@@ -55,8 +56,6 @@ public:
 	OpenVRSwapCallback(OpenVRDevice* device) : m_device(device), m_frameIndex(0) {}
 	void swapBuffersImplementation(osg::GraphicsContext* gc)
 	{
-		m_device->submitFrame();
-		
 		gc->swapBuffersImplementation();
 	}
 	int frameIndex() const { return m_frameIndex; }
@@ -141,12 +140,8 @@ int main()
 	rightCamera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
 	rightCamera->setUpdateCallback(new CameraMovement(openvrDevice));
 	rightCamera->setComputeNearFarMode(osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR);
-	rightCamera->setPostDrawCallback(new CameraCallback(texture, openvrDevice));
-
-	osg::ref_ptr<osg::Image> ri = new osg::Image;
-	ri->allocateImage(1024, 1024, 1, GL_RGBA, GL_FLOAT);
-	rightCamera->attach(osg::Camera::COLOR_BUFFER, texture.get());
-
+	rightCamera->attach(osg::Camera::COLOR_BUFFER0, texture.get(), 0, 0, false, 4, 4);
+	rightCamera->setFinalDrawCallback(new CameraCallback(texture, openvrDevice));
 	//leftCamera->setViewMatrixAsLookAt(osg::Vec3(5.0f, 0.0f, 0.0f), osg::Vec3(6.0f, 0.0f, 0.0f), osg::Vec3(0.0f, 0.0f, 1.0f));
 
 	osg::ref_ptr<osg::Geometry> leftPlane = osg::createTexturedQuadGeometry(osg::Vec3(), osg::Vec3(5.0, 0, 0), osg::Vec3(0, 0, 5));
