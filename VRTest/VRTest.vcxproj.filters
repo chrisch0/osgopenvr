@@ -18,6 +18,12 @@
     <ClCompile Include="VRTest.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="OpenVRDevice.h">
+      <Filter>头文件</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenVRDevice.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="osgStaticLibs.h">
