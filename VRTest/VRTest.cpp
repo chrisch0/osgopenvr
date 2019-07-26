@@ -6,22 +6,39 @@
 #include <osg/Image>
 #include <osg/io_utils>
 #include <sstream>
+#include <cstdlib>
 #include "OpenVRDevice.h"
+
+enum Eye
+{
+	Left = 0,
+	Right
+};
 
 class CameraCallback : public osg::Camera::DrawCallback
 {
 public:
-	CameraCallback(osg::Texture2D *lt, OpenVRDevice *device) : m_device(device), leftTexture(lt) {}
+	CameraCallback(Eye eye, osg::Texture2D *texture, OpenVRDevice *device) : m_eye(eye), m_device(device), m_texture(texture) {}
 	virtual void operator () (osg::RenderInfo& renderInfo) const
 	{
 		int cID = renderInfo.getContextID();
-		auto textureObject = leftTexture->getTextureObject(cID);
-		m_device->m_leftTextureID = (unsigned int)textureObject->id();
-		m_device->submitFrame();
+		auto textureObject = m_texture->getTextureObject(cID);
+		if (m_eye == Left)
+		{
+			m_device->m_leftTextureID = (unsigned int)textureObject->id();
+			m_device->submitLeftEyeFrame();
+		}
+		if (m_eye == Right)
+		{
+			m_device->m_rightTextureID = (unsigned int)textureObject->id();
+			m_device->submitRightEyeFrame();
+		}
+		
 	}
 private:
+	Eye m_eye;
 	osg::ref_ptr<OpenVRDevice> m_device;
-	osg::ref_ptr<osg::Texture2D> leftTexture;
+	osg::ref_ptr<osg::Texture2D> m_texture;
 };
 
 class CameraMovement : public osg::NodeCallback
@@ -43,6 +60,7 @@ public:
 		std::stringstream ss;
 		ss << t << std::endl;
 		OutputDebugStringA(ss.str().c_str());
+		traverse(node, nv);
 	}
 private:
 	osg::ref_ptr<OpenVRDevice> m_device;
@@ -62,6 +80,28 @@ public:
 private:
 	osg::observer_ptr<OpenVRDevice> m_device;
 	int m_frameIndex;
+};
+
+class OpenVRUpdateCallback : public osg::NodeCallback
+{
+public:
+	OpenVRUpdateCallback(OpenVRDevice *device, osg::Camera *leftCamera, osg::Camera *rightCamera) :
+		m_device(device),
+		m_leftCamera(leftCamera),
+		m_rightCamera(rightCamera)
+	{
+
+	}
+
+	virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
+	{
+		m_device->updateHMDMatrixPose();
+		traverse(node, nv);
+	}
+private:
+	osg::ref_ptr<OpenVRDevice> m_device;
+	osg::ref_ptr<osg::Camera> m_leftCamera;
+	osg::ref_ptr<osg::Camera> m_rightCamera;
 };
 
 //class OpenVRUpdateSlaveCallback : public osg::View::Slave::UpdateSlaveCallback
@@ -100,61 +140,106 @@ private:
 //	osg::ref_ptr<OpenVRSwapCallback> m_swapCallback;
 //};
 
+
+osg::Camera* createRTTCamera(Eye eye, OpenVRDevice *device, osg::ref_ptr<osg::Texture2D> texture)
+{
+	osg::ref_ptr<osg::Camera> camera = new osg::Camera;
+
+	camera->setViewport(0, 0, device->getTextureWidth(), device->getTextureHeight());
+	if (eye == Left)
+		camera->setProjectionMatrix(device->getProjectionMatrixLeft());
+	if (eye == Right)
+		camera->setProjectionMatrix(device->getProjectionMatrixRight());
+	camera->setClearColor(osg::Vec4(1.0f, 1.0f, 1.0f, 0.0f));
+	camera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	camera->setRenderOrder(osg::Camera::PRE_RENDER, eye);
+	camera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT);
+	camera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
+	camera->setUpdateCallback(new CameraMovement(device));
+	//camera->setUpdateCallback(new CameraMovement(device));
+	camera->setComputeNearFarMode(osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR);
+	camera->attach(osg::Camera::COLOR_BUFFER0, texture, 0, 0, false, 4, 4);
+	camera->setFinalDrawCallback(new CameraCallback(eye, texture, device));
+	return camera.release();
+}
+
+osg::Texture2D* creatRenderTexture(OpenVRDevice* device)
+{
+	osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
+	texture->setTextureSize(device->getTextureWidth(), device->getTextureHeight());
+	texture->setInternalFormat(GL_RGBA);
+	texture->setFilter(osg::Texture2D::MIN_FILTER, osg::Texture2D::LINEAR);
+	texture->setFilter(osg::Texture2D::MAG_FILTER, osg::Texture2D::LINEAR);
+
+	return texture.release();
+}
+
 int main()
 {
-	OpenVRDevice* openvrDevice = new OpenVRDevice;
+	if (!OpenVRDevice::hmdPresent())
+	{
+		osg::notify(osg::FATAL) << "Error: No valid HMD present!" << std::endl;
+		return 1;
+	}
+
+	float nearClip = 0.1f;
+	float farClip = 500.0f;
+
+	osg::ref_ptr<OpenVRDevice> openvrDevice = new OpenVRDevice(nearClip, farClip);
 	//Æô¶¯OpenVR
 	if (!openvrDevice->openVRInit())
 	{
 		openvrDevice->openVRShutdown();
 	}
 
+	if (!openvrDevice->hmdInitialized())
+	{
+		return 1;
+	}
+
+	openvrDevice->configureCamera();
+
 	osgViewer::Viewer viewer;
 	osg::ref_ptr<osg::Node> cow = osgDB::readNodeFile("cow.osgt");
-	osg::ref_ptr<osg::MatrixTransform> cowPosition = new osg::MatrixTransform;
-	cowPosition->addChild(cow);
+	osg::ref_ptr<osg::MatrixTransform> cowMatrixTransform = new osg::MatrixTransform;
+	cowMatrixTransform->addChild(cow);
 	osg::Matrix cowPos;
-	cowPos.setTrans(osg::Vec3(10.0, 0.0, 0.0));
-	cowPosition->setMatrix(cowPos);
+	cowPos.setTrans(osg::Vec3(0.0, 0.0, 0.0));
+	cowMatrixTransform->setMatrix(cowPos);
 
 	osg::ref_ptr<osg::Group> root = new osg::Group;
-
-	osg::ref_ptr<osg::Camera> leftCamera = new osg::Camera;
-	osg::ref_ptr<osg::Camera> rightCamera = new osg::Camera;
+	osg::ref_ptr<osg::Group> scene = new osg::Group;
 
 	osg::ref_ptr<osg::Image> image = osgDB::readImageFile("reflect.rgb");
 
-	osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
-	texture->setTextureSize(1024, 1024);
-	texture->setInternalFormat(GL_RGBA);
-	texture->setFilter(osg::Texture2D::MIN_FILTER, osg::Texture2D::LINEAR);
-	texture->setFilter(osg::Texture2D::MAG_FILTER, osg::Texture2D::LINEAR);
-	//texture->setImage(image);
+	osg::ref_ptr<osg::Texture2D> leftTexture = creatRenderTexture(openvrDevice);
+	osg::ref_ptr<osg::Texture2D> rightTexture = creatRenderTexture(openvrDevice);
 
-	rightCamera->setViewport(0, 0, 1024, 1024);
-	rightCamera->setProjectionMatrixAsPerspective(30.0, 1.6667, 0.1, 50.0);
-	rightCamera->setClearColor(osg::Vec4(1.0f, 1.0f, 1.0f, 0.0f));
-	rightCamera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	rightCamera->setRenderOrder(osg::Camera::PRE_RENDER);
-	rightCamera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT);
-	rightCamera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
-	rightCamera->setUpdateCallback(new CameraMovement(openvrDevice));
-	rightCamera->setComputeNearFarMode(osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR);
-	rightCamera->attach(osg::Camera::COLOR_BUFFER0, texture.get(), 0, 0, false, 4, 4);
-	rightCamera->setFinalDrawCallback(new CameraCallback(texture, openvrDevice));
-	//leftCamera->setViewMatrixAsLookAt(osg::Vec3(5.0f, 0.0f, 0.0f), osg::Vec3(6.0f, 0.0f, 0.0f), osg::Vec3(0.0f, 0.0f, 1.0f));
+	osg::ref_ptr<osg::Camera> leftCamera = createRTTCamera(Left, openvrDevice, leftTexture);
+	osg::ref_ptr<osg::Camera> rightCamera = createRTTCamera(Right, openvrDevice, rightTexture);
 
-	osg::ref_ptr<osg::Geometry> leftPlane = osg::createTexturedQuadGeometry(osg::Vec3(), osg::Vec3(5.0, 0, 0), osg::Vec3(0, 0, 5));
-	osg::ref_ptr<osg::StateSet> ss = new osg::StateSet();
-	ss->setTextureAttributeAndModes(0, texture.get(), osg::StateAttribute::ON);
-	leftPlane->setStateSet(ss.get());
-	//leftCamera->attach(osg::Camera::COLOR_BUFFER, leftTexture);
+
+	osg::ref_ptr<osg::Geometry> leftPlane = osg::createTexturedQuadGeometry(osg::Vec3(-2.0, 0.0, 0.0), osg::Vec3(2.0, 0, 0), osg::Vec3(0, 0, 2));
+	osg::ref_ptr<osg::StateSet> lss = new osg::StateSet;
+	lss->setTextureAttributeAndModes(0, leftTexture, osg::StateAttribute::ON);
+	leftPlane->setStateSet(lss);
 	
+	osg::ref_ptr<osg::Geometry> rightPlane = osg::createTexturedQuadGeometry(osg::Vec3(), osg::Vec3(2.0, 0, 0), osg::Vec3(0, 0, 2));
+	osg::ref_ptr<osg::StateSet> rss = new osg::StateSet;
+	rss->setTextureAttributeAndModes(0, rightTexture, osg::StateAttribute::ON);
+	rightPlane->setStateSet(rss);
+	
+	scene->addChild(cow);
+	scene->addChild(openvrDevice->getControllerNode(0));
+	scene->addChild(openvrDevice->getControllerNode(1));
+	leftCamera->addChild(scene);
+	rightCamera->addChild(scene);
 	
 	root->addChild(leftPlane);
-	root->addChild(cowPosition);
+	root->addChild(rightPlane);
+	root->addChild(leftCamera);
 	root->addChild(rightCamera);
-	rightCamera->addChild(cow);
+	
 
 	viewer.setUpViewInWindow(10, 10, 1024, 768);
 	viewer.addEventHandler(new osgViewer::StatsHandler);
