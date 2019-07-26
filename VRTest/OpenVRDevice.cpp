@@ -302,10 +302,11 @@ void OpenVRDevice::updateHMDMatrixPose()
 	if (pose.bPoseIsValid)
 	{
 		osg::Matrix matrix = convertMatrix34(pose.mDeviceToAbsoluteTracking);
+		m_hmdPoseMatrix = matrix;
 		osg::Matrix poseTransform = osg::Matrix::inverse(matrix);
 		m_hmdPosition = poseTransform.getTrans() * m_worldUnitsPerMetre;
 		m_hmdOrientation = poseTransform.getRotate();
-		m_hmdPoseMatrix = poseTransform;
+		m_hmdPoseInverseMatrix = poseTransform;
 	}
 
 	handleInput();
@@ -361,10 +362,10 @@ void OpenVRDevice::setControllerMatrixTransform(osg::Matrix viewMatrix, int eye)
 		osg::Matrix xr;
 		xr.makeRotate(-0.5*PI, osg::Vec3(1.0, 0.0, 0.0));
 		osg::Matrix inversedViewMatrix = osg::Matrix::inverse(viewMatrix);
-		osg::Matrix eyeMatrix = (eye == 0) ? m_leftEyePosMatrix : m_rightEyePosMatrix;
-		osg::Matrix viewTrans = m_hmdPoseMatrix * eyeMatrix * inversedViewMatrix;
+		osg::Matrix eyeMatrix = (eye == 0) ? m_leftEyePosInverseMatrix : m_rightEyePosInverseMatrix;
+		osg::Matrix viewTrans = m_hmdPoseInverseMatrix * eyeMatrix * inversedViewMatrix;
 		osg::Matrix controller = xr * matController * viewTrans;
-		osg::Matrix worldMatrix = xr * matController * m_hmdPoseMatrix * inversedViewMatrix;
+		osg::Matrix worldMatrix = xr * matController * m_hmdPoseInverseMatrix * inversedViewMatrix;
 		m_rHand[i].m_worldPosition = osg::Vec3(0.0, 0.0, 0.0) * worldMatrix;
 		m_rHand[i].m_worldTowards = osg::Vec3(0.0, m_lineLength, 0.0) * worldMatrix;
 		getControllerNode(i)->setMatrix(controller);
@@ -480,11 +481,13 @@ void OpenVRDevice::calculateEyeAdjustment()
 {
 	osg::Matrix mat;
 	mat = convertMatrix34(m_vrSystem->GetEyeToHeadTransform(vr::Eye_Left));
+	m_leftEyePosMatrix = mat;
 	m_leftEyeAdjust = mat.getTrans();
-	m_leftEyePosMatrix = osg::Matrix::inverse(mat);
+	m_leftEyePosInverseMatrix = osg::Matrix::inverse(mat);
 	mat = convertMatrix34(m_vrSystem->GetEyeToHeadTransform(vr::Eye_Right));
+	m_rightEyePosMatrix = mat;
 	m_rightEyeAdjust = mat.getTrans();
-	m_rightEyePosMatrix = osg::Matrix::inverse(mat);
+	m_rightEyePosInverseMatrix = osg::Matrix::inverse(mat);
 
 	// Display IPD
 	float ipd = (m_leftEyeAdjust - m_rightEyeAdjust).length();

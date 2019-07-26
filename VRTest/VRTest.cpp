@@ -85,10 +85,11 @@ private:
 class OpenVRUpdateCallback : public osg::NodeCallback
 {
 public:
-	OpenVRUpdateCallback(OpenVRDevice *device, osg::Camera *leftCamera, osg::Camera *rightCamera) :
+	OpenVRUpdateCallback(OpenVRDevice *device, osg::Camera *leftCamera, osg::Camera *rightCamera, osg::Vec3 pos) :
 		m_device(device),
 		m_leftCamera(leftCamera),
-		m_rightCamera(rightCamera)
+		m_rightCamera(rightCamera),
+		m_refPosition(pos)
 	{
 
 	}
@@ -96,12 +97,16 @@ public:
 	virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
 	{
 		m_device->updateHMDMatrixPose();
+
+		m_leftCamera->setViewMatrix(m_device->getHMDPoseMatrix() * m_device->getLeftEyePosMatrix() * m_device->getProjectionMatrixLeft());
+		m_rightCamera->setViewMatrix(m_device->getHMDPoseMatrix() * m_device->getRightEyePosMatrix() * m_device->getProjectionMatrixRight());
 		traverse(node, nv);
 	}
 private:
 	osg::ref_ptr<OpenVRDevice> m_device;
 	osg::ref_ptr<osg::Camera> m_leftCamera;
 	osg::ref_ptr<osg::Camera> m_rightCamera;
+	osg::Vec3 m_refPosition;
 };
 
 //class OpenVRUpdateSlaveCallback : public osg::View::Slave::UpdateSlaveCallback
@@ -155,7 +160,7 @@ osg::Camera* createRTTCamera(Eye eye, OpenVRDevice *device, osg::ref_ptr<osg::Te
 	camera->setRenderOrder(osg::Camera::PRE_RENDER, eye);
 	camera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT);
 	camera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
-	camera->setUpdateCallback(new CameraMovement(device));
+	//camera->setUpdateCallback(new CameraMovement(device));
 	//camera->setUpdateCallback(new CameraMovement(device));
 	camera->setComputeNearFarMode(osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR);
 	camera->attach(osg::Camera::COLOR_BUFFER0, texture, 0, 0, false, 4, 4);
@@ -204,7 +209,7 @@ int main()
 	osg::ref_ptr<osg::MatrixTransform> cowMatrixTransform = new osg::MatrixTransform;
 	cowMatrixTransform->addChild(cow);
 	osg::Matrix cowPos;
-	cowPos.setTrans(osg::Vec3(0.0, 0.0, 0.0));
+	cowPos.setTrans(osg::Vec3(10.0, 0.0, 0.0));
 	cowMatrixTransform->setMatrix(cowPos);
 
 	osg::ref_ptr<osg::Group> root = new osg::Group;
@@ -239,7 +244,7 @@ int main()
 	root->addChild(rightPlane);
 	root->addChild(leftCamera);
 	root->addChild(rightCamera);
-	
+	root->addUpdateCallback(new OpenVRUpdateCallback(openvrDevice, leftCamera, rightCamera, osg::Vec3()));
 
 	viewer.setUpViewInWindow(10, 10, 1024, 768);
 	viewer.addEventHandler(new osgViewer::StatsHandler);

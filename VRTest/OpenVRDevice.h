@@ -43,6 +43,9 @@ public:
 
 	osg::Vec3 getHMDPosition() const { return m_hmdPosition; }
 	osg::Quat getHMDOrientation() const { return m_hmdOrientation; }
+	osg::Matrix getHMDPoseMatrix() const { return m_hmdPoseMatrix; }
+	osg::Matrix getLeftEyePosMatrix() const { return m_leftEyePosMatrix; }
+	osg::Matrix getRightEyePosMatrix() const { return m_rightEyePosMatrix; }
 
 	osg::Matrix getProjectionMatrixCenter() const { return (m_leftEyeProjectionMatrix + m_rightEyeProjectionMatrix) * 0.5; }
 	osg::Matrix getProjectionMatrixLeft() const { return m_leftEyeProjectionMatrix; }
@@ -116,8 +119,11 @@ private:
 	vr::IVRSystem *m_vrSystem;
 	vr::IVRRenderModels *m_vrRenderModels;
 
+	osg::Matrix m_hmdPoseMatrix;
 	osg::Matrixf m_leftEyeProjectionMatrix;
 	osg::Matrixf m_rightEyeProjectionMatrix;
+	osg::Matrixf m_leftEyePosMatrix;
+	osg::Matrixf m_rightEyePosMatrix;
 	osg::Vec3f m_leftEyeAdjust;
 	osg::Vec3f m_rightEyeAdjust;
 
@@ -139,11 +145,11 @@ private:
 	osg::ref_ptr<osg::MatrixTransform> m_lookAtPoint;
 
 	//inversed
-	osg::Matrix m_hmdPoseMatrix;
+	osg::Matrix m_hmdPoseInverseMatrix;
 	//inversed
-	osg::Matrix m_leftEyePosMatrix;
+	osg::Matrix m_leftEyePosInverseMatrix;
 	//inversed
-	osg::Matrix m_rightEyePosMatrix;
+	osg::Matrix m_rightEyePosInverseMatrix;
 
 	float m_vAnalogValue[2];
 	struct ControllerInfo_t
