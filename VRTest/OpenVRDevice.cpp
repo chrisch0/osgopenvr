@@ -126,6 +126,7 @@ OpenVRDevice::OpenVRDevice(float nearClip, float farClip, const float worldUnits
 	m_samples(sample)
 {
 	trySetProcessAsHighPriority();
+	m_openVRMatrixtoOsgMatrix.makeRotate(-0.5*PI, osg::Vec3(1.0, 0.0, 0.0));
 }
 
 OpenVRDevice::~OpenVRDevice()

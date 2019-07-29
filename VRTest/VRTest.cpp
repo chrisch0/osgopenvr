@@ -8,7 +8,7 @@
 #include <sstream>
 #include <cstdlib>
 #include "OpenVRDevice.h"
-
+#define PI 3.1415926
 enum Eye
 {
 	Left = 0,
@@ -27,11 +27,13 @@ public:
 		{
 			m_device->m_leftTextureID = (unsigned int)textureObject->id();
 			m_device->submitLeftEyeFrame();
+			//printf("left\n");
 		}
 		if (m_eye == Right)
 		{
 			m_device->m_rightTextureID = (unsigned int)textureObject->id();
 			m_device->submitRightEyeFrame();
+			//printf("right\n");
 		}
 		
 	}
@@ -44,27 +46,37 @@ private:
 class CameraMovement : public osg::NodeCallback
 {
 public:
-	CameraMovement(OpenVRDevice *device) : m_device(device)
+	CameraMovement(Eye e, OpenVRDevice *device, osg::Vec3 refpos, float h_angle) : m_device(device), m_eye(e), m_refPos(refpos), m_head(h_angle)
 	{
 		eye = osg::Vec3(1.0, 0.0, 0.0);
 	}
 	virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
 	{
 		m_device->updateHMDMatrixPose();
-		theta += 1.2;
-		float a = theta / 180 * 3.1415926;
-		eye = osg::Vec3(cos(a), sin(a), 0.0) * 10.0;
-		node->asCamera()->setViewMatrixAsLookAt(eye, osg::Vec3(0.0f, 0.0f, 0.0f), osg::Vec3(0.0f, 0.0f, 1.0f));
-		osg::Vec3 t, c, u;
-		node->asCamera()->getViewMatrixAsLookAt(t, c, u);
-		std::stringstream ss;
-		ss << t << std::endl;
-		OutputDebugStringA(ss.str().c_str());
+		osg::Matrix ref;
+		ref.makeRotate(m_head * 0.017453, osg::Vec3(0.0, 0.0, 1.0));
+		ref.setTrans(m_refPos);
+		if (m_eye == Left)
+		{
+			//node->asCamera()->setViewMatrix(m_device->getHMDPoseMatrix() * m_device->getLeftEyePosMatrix() * m_device->getProjectionMatrixLeft());
+			
+			node->asCamera()->setViewMatrix(osg::Matrix::inverse(ref) * m_device->getLeftEyeViewMatrix());
+			node->asCamera()->setProjectionMatrix(m_device->getProjectionMatrixLeft());
+		}
+		if (m_eye == Right)
+		{
+			//node->asCamera()->setViewMatrix(m_device->getHMDPoseMatrix() * m_device->getRightEyePosMatrix() * m_device->getProjectionMatrixRight());
+			node->asCamera()->setViewMatrix(osg::Matrix::inverse(ref) * m_device->getRightEyeViewMatrix());
+			node->asCamera()->setProjectionMatrix(m_device->getProjectionMatrixRight());
+		}
 		traverse(node, nv);
 	}
 private:
+	Eye m_eye;
 	osg::ref_ptr<OpenVRDevice> m_device;
 	osg::Vec3 eye;
+	osg::Vec3 m_refPos;
+	float m_head;
 	float theta = 0.0;
 };
 
@@ -100,6 +112,7 @@ public:
 
 		m_leftCamera->setViewMatrix(m_device->getHMDPoseMatrix() * m_device->getLeftEyePosMatrix() * m_device->getProjectionMatrixLeft());
 		m_rightCamera->setViewMatrix(m_device->getHMDPoseMatrix() * m_device->getRightEyePosMatrix() * m_device->getProjectionMatrixRight());
+		printf("2\n");
 		traverse(node, nv);
 	}
 private:
@@ -160,7 +173,7 @@ osg::Camera* createRTTCamera(Eye eye, OpenVRDevice *device, osg::ref_ptr<osg::Te
 	camera->setRenderOrder(osg::Camera::PRE_RENDER, eye);
 	camera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT);
 	camera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
-	//camera->setUpdateCallback(new CameraMovement(device));
+	camera->setUpdateCallback(new CameraMovement(eye, device, osg::Vec3(0, 10, 5), -90.f));
 	//camera->setUpdateCallback(new CameraMovement(device));
 	camera->setComputeNearFarMode(osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR);
 	camera->attach(osg::Camera::COLOR_BUFFER0, texture, 0, 0, false, 4, 4);
@@ -209,7 +222,7 @@ int main()
 	osg::ref_ptr<osg::MatrixTransform> cowMatrixTransform = new osg::MatrixTransform;
 	cowMatrixTransform->addChild(cow);
 	osg::Matrix cowPos;
-	cowPos.setTrans(osg::Vec3(10.0, 0.0, 0.0));
+	cowPos.setTrans(osg::Vec3(0.0, 10.0, 0.0));
 	cowMatrixTransform->setMatrix(cowPos);
 
 	osg::ref_ptr<osg::Group> root = new osg::Group;
@@ -224,17 +237,17 @@ int main()
 	osg::ref_ptr<osg::Camera> rightCamera = createRTTCamera(Right, openvrDevice, rightTexture);
 
 
-	osg::ref_ptr<osg::Geometry> leftPlane = osg::createTexturedQuadGeometry(osg::Vec3(-2.0, 0.0, 0.0), osg::Vec3(2.0, 0, 0), osg::Vec3(0, 0, 2));
+	osg::ref_ptr<osg::Geometry> leftPlane = osg::createTexturedQuadGeometry(osg::Vec3(0.0, 0.0, 0.0), osg::Vec3(0.5, 0, 0), osg::Vec3(0, 1.0, 0));
 	osg::ref_ptr<osg::StateSet> lss = new osg::StateSet;
 	lss->setTextureAttributeAndModes(0, leftTexture, osg::StateAttribute::ON);
 	leftPlane->setStateSet(lss);
 	
-	osg::ref_ptr<osg::Geometry> rightPlane = osg::createTexturedQuadGeometry(osg::Vec3(), osg::Vec3(2.0, 0, 0), osg::Vec3(0, 0, 2));
+	osg::ref_ptr<osg::Geometry> rightPlane = osg::createTexturedQuadGeometry(osg::Vec3(0.5, 0.0, 0.0), osg::Vec3(0.5, 0, 0), osg::Vec3(0, 1.0, 0));
 	osg::ref_ptr<osg::StateSet> rss = new osg::StateSet;
 	rss->setTextureAttributeAndModes(0, rightTexture, osg::StateAttribute::ON);
 	rightPlane->setStateSet(rss);
 	
-	scene->addChild(cow);
+	scene->addChild(cowMatrixTransform);
 	scene->addChild(openvrDevice->getControllerNode(0));
 	scene->addChild(openvrDevice->getControllerNode(1));
 	leftCamera->addChild(scene);
@@ -244,12 +257,13 @@ int main()
 	root->addChild(rightPlane);
 	root->addChild(leftCamera);
 	root->addChild(rightCamera);
-	root->addUpdateCallback(new OpenVRUpdateCallback(openvrDevice, leftCamera, rightCamera, osg::Vec3()));
+	//root->addUpdateCallback(new OpenVRUpdateCallback(openvrDevice, leftCamera, rightCamera, osg::Vec3()));
 
-	viewer.setUpViewInWindow(10, 10, 1024, 768);
+	viewer.setUpViewInWindow(100, 100, 1024, 512);
 	viewer.addEventHandler(new osgViewer::StatsHandler);
 	
 	viewer.setSceneData(root);
+	viewer.getCamera()->setProjectionMatrixAsOrtho2D(0.0, 1.0, 0.0, 1.0);
 	//viewer.addSlave(rightCamera.get());
 	//viewer.addSlave(leftCamera);
 	//viewer.addSlave(rightCamera);
@@ -260,7 +274,7 @@ int main()
 	gc->setSwapCallback(swapCallback);
 
 	
-	return viewer.run();
+	//return viewer.run();
 	while (!viewer.done())
 	{
 		viewer.frame();

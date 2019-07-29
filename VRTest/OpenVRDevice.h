@@ -41,11 +41,16 @@ public:
 
 	void setControllerMatrixTransform(osg::Matrix viewMatrix, int eye);
 
+	osg::Matrix getLeftEyeViewMatrix() const { return m_openVRMatrixtoOsgMatrix * m_hmdPoseInverseMatrix * m_leftEyePosInverseMatrix; }
+	osg::Matrix getRightEyeViewMatrix() const { return m_openVRMatrixtoOsgMatrix * m_hmdPoseInverseMatrix * m_rightEyePosInverseMatrix; }
 	osg::Vec3 getHMDPosition() const { return m_hmdPosition; }
 	osg::Quat getHMDOrientation() const { return m_hmdOrientation; }
 	osg::Matrix getHMDPoseMatrix() const { return m_hmdPoseMatrix; }
 	osg::Matrix getLeftEyePosMatrix() const { return m_leftEyePosMatrix; }
 	osg::Matrix getRightEyePosMatrix() const { return m_rightEyePosMatrix; }
+	osg::Matrix getHMDPoseInverseMatrix() const { return m_hmdPoseInverseMatrix; }
+	osg::Matrix getLeftEyePosInverseMatrix() const { return m_leftEyePosInverseMatrix; }
+	osg::Matrix getRightEyePosInverseMatrix() const { return m_rightEyePosInverseMatrix; }
 
 	osg::Matrix getProjectionMatrixCenter() const { return (m_leftEyeProjectionMatrix + m_rightEyeProjectionMatrix) * 0.5; }
 	osg::Matrix getProjectionMatrixLeft() const { return m_leftEyeProjectionMatrix; }
@@ -106,6 +111,7 @@ protected:
 	~OpenVRDevice();
 
 private:
+	osg::Matrix m_openVRMatrixtoOsgMatrix;
 	std::string getTrackedDeviceInfo(vr::TrackedDeviceProperty prop, vr::TrackedPropertyError *peError = NULL);
 	void prepareControllerModel();
 
