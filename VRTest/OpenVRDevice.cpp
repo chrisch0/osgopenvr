@@ -254,7 +254,6 @@ void OpenVRDevice::handleInput()
 	m_rHand[Left].m_menu = true;
 	m_rHand[Right].m_menu = true;
 
-	std::stringstream s;
 	vr::VRInputValueHandle_t ulHideDevice;
 	if (GetDigitalActionState(m_actionMenu, &ulHideDevice))
 	{
@@ -267,7 +266,6 @@ void OpenVRDevice::handleInput()
 			m_rHand[Right].m_menu = false;
 		}
 	}
-	OutputDebugStringA(s.str().c_str());
 
 	for (EHand eHand = Left; eHand <= Right; ((int&)eHand)++)
 	{
@@ -289,7 +287,7 @@ void OpenVRDevice::handleInput()
 
 void OpenVRDevice::updateHMDMatrixPose()
 {
-	vr::VRCompositor()->SetTrackingSpace(vr::TrackingUniverseSeated);
+	vr::VRCompositor()->SetTrackingSpace(vr::TrackingUniverseStanding);
 
 	vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
 	for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; ++i) poses[i].bPoseIsValid = false;
@@ -354,19 +352,17 @@ void OpenVRDevice::resetSensorOrientation() const
 	m_vrSystem->ResetSeatedZeroPose();
 }
 
-void OpenVRDevice::setControllerMatrixTransform(osg::Matrix viewMatrix, int eye)
+void OpenVRDevice::setControllerMatrixTransform(int eye, osg::Matrix viewMatrix)
 {
 	for (int i = 0; i < 2; ++i)
 	{
 		osg::Matrix matController = getControllerMatrix(i);
-
-		osg::Matrix xr;
-		xr.makeRotate(-0.5*PI, osg::Vec3(1.0, 0.0, 0.0));
+	
 		osg::Matrix inversedViewMatrix = osg::Matrix::inverse(viewMatrix);
 		osg::Matrix eyeMatrix = (eye == 0) ? m_leftEyePosInverseMatrix : m_rightEyePosInverseMatrix;
 		osg::Matrix viewTrans = m_hmdPoseInverseMatrix * eyeMatrix * inversedViewMatrix;
-		osg::Matrix controller = xr * matController * viewTrans;
-		osg::Matrix worldMatrix = xr * matController * m_hmdPoseInverseMatrix * inversedViewMatrix;
+		osg::Matrix controller = m_openVRMatrixtoOsgMatrix * matController * viewTrans;
+		osg::Matrix worldMatrix = m_openVRMatrixtoOsgMatrix * matController * m_hmdPoseInverseMatrix * inversedViewMatrix;
 		m_rHand[i].m_worldPosition = osg::Vec3(0.0, 0.0, 0.0) * worldMatrix;
 		m_rHand[i].m_worldTowards = osg::Vec3(0.0, m_lineLength, 0.0) * worldMatrix;
 		getControllerNode(i)->setMatrix(controller);
