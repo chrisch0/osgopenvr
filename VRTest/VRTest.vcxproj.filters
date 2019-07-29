@@ -29,5 +29,8 @@
     <ClInclude Include="osgStaticLibs.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="OpenVRCallback.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -3,6 +3,7 @@
 #include <osgDB/ReadFile>
 #include <osg/ShapeDrawable>
 #include <sstream>
+#include "OpenVRCallback.h"
 
 
 #ifndef MAX_UNICODE_PATH
@@ -127,6 +128,9 @@ OpenVRDevice::OpenVRDevice(float nearClip, float farClip, const float worldUnits
 {
 	trySetProcessAsHighPriority();
 	m_openVRMatrixtoOsgMatrix.makeRotate(-0.5*PI, osg::Vec3(1.0, 0.0, 0.0));
+	m_scene = new osg::Group;
+	m_leftCamera = new osg::Camera;
+	m_rightCamera = new osg::Camera;
 }
 
 OpenVRDevice::~OpenVRDevice()
@@ -350,6 +354,28 @@ bool OpenVRDevice::submitRightEyeFrame()
 void OpenVRDevice::resetSensorOrientation() const
 {
 	m_vrSystem->ResetSeatedZeroPose();
+}
+
+void OpenVRDevice::createRTTCamera(Eye eye, osg::ref_ptr<osg::Texture2D> &texture, std::shared_ptr<osg::Vec3> &refPos, float *head)
+{
+	auto camera = eye == LEFT ? getLeftCamera() : getRightCamera();
+
+	camera->setViewport(0, 0, getTextureWidth(), getTextureHeight());
+	if (eye == LEFT)
+		camera->setProjectionMatrix(getProjectionMatrixLeft());
+	if (eye == LEFT)
+		camera->setProjectionMatrix(getProjectionMatrixRight());
+	camera->setClearColor(osg::Vec4(0.2f, 0.0f, 0.8f, 0.0f));
+	camera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	camera->setRenderOrder(osg::Camera::PRE_RENDER, eye);
+	camera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT);
+	camera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
+	camera->setUpdateCallback(new OpenVRUpdateCallback(eye, this, refPos, head));
+	//camera->setUpdateCallback(new CameraMovement(device));
+	camera->setComputeNearFarMode(osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR);
+	camera->attach(osg::Camera::COLOR_BUFFER0, texture, 0, 0, false, 4, 4);
+	camera->setFinalDrawCallback(new OpenVRSubmitFrameCallback(eye, texture, this));
+	camera->addChild(m_scene);
 }
 
 void OpenVRDevice::setControllerMatrixTransform(int eye, osg::Matrix viewMatrix)

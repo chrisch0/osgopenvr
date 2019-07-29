@@ -4,6 +4,8 @@
 #include <osg/Quat>
 #include <osg/Matrix>
 #include <osg/MatrixTransform>
+#include <osg/Texture2D>
+#include <osg/Camera>
 #include <array>
 #include <openvr.h>
 
@@ -32,25 +34,22 @@ public:
 	bool submitLeftEyeFrame();
 	bool submitRightEyeFrame();
 	void resetSensorOrientation() const;
-
+	
 	static bool hmdPresent();
 	bool hmdInitialized() const;
 
-	//void creatRenderBuffers(osg::ref_ptr<osg::State> state);
-	//osg::Camera* createRTTCamera(OpenVRDevice::Eye)
+	void createRTTCamera(Eye eye, osg::ref_ptr<osg::Texture2D> &texture, std::shared_ptr<osg::Vec3> &refPos, float *head);
 
 	void setControllerMatrixTransform(int eye, osg::Matrix viewMatrix);
 
+	template<class T> bool addChild(const osg::ref_ptr<T>& child) { return m_scene->addChild(child.get()); }
+
+	osg::ref_ptr<osg::Camera> getLeftCamera() const { return m_leftCamera; }
+	osg::ref_ptr<osg::Camera> getRightCamera() const { return m_rightCamera; }
+
 	osg::Matrix getLeftEyeViewMatrix() const { return m_openVRMatrixtoOsgMatrix * m_hmdPoseInverseMatrix * m_leftEyePosInverseMatrix; }
 	osg::Matrix getRightEyeViewMatrix() const { return m_openVRMatrixtoOsgMatrix * m_hmdPoseInverseMatrix * m_rightEyePosInverseMatrix; }
-	//osg::Vec3 getHMDPosition() const { return m_hmdPosition; }
-	//osg::Quat getHMDOrientation() const { return m_hmdOrientation; }
 	osg::Matrix getHMDPoseMatrix() const { return m_hmdPoseMatrix; }
-	//osg::Matrix getLeftEyePosMatrix() const { return m_leftEyePosMatrix; }
-	//osg::Matrix getRightEyePosMatrix() const { return m_rightEyePosMatrix; }
-	//osg::Matrix getHMDPoseInverseMatrix() const { return m_hmdPoseInverseMatrix; }
-	//osg::Matrix getLeftEyePosInverseMatrix() const { return m_leftEyePosInverseMatrix; }
-	//osg::Matrix getRightEyePosInverseMatrix() const { return m_rightEyePosInverseMatrix; }
 
 	osg::Matrix getProjectionMatrixCenter() const { return (m_leftEyeProjectionMatrix + m_rightEyeProjectionMatrix) * 0.5; }
 	osg::Matrix getProjectionMatrixLeft() const { return m_leftEyeProjectionMatrix; }
@@ -124,6 +123,10 @@ private:
 
 	vr::IVRSystem *m_vrSystem;
 	vr::IVRRenderModels *m_vrRenderModels;
+
+	osg::ref_ptr<osg::Group> m_scene;
+	osg::ref_ptr<osg::Camera> m_leftCamera;
+	osg::ref_ptr<osg::Camera> m_rightCamera;
 
 	osg::Matrix m_hmdPoseMatrix;
 	osg::Matrixf m_leftEyeProjectionMatrix;

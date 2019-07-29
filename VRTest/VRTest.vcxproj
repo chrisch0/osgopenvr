@@ -131,6 +131,7 @@
     <ClCompile Include="VRTest.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="OpenVRCallback.h" />
     <ClInclude Include="osgStaticLibs.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
