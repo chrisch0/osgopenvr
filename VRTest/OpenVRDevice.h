@@ -39,6 +39,9 @@ public:
 	bool hmdInitialized() const;
 
 	void createRTTCamera(Eye eye, osg::ref_ptr<osg::Texture2D> &texture, std::shared_ptr<osg::Vec3> &refPos, float *head);
+	osg::Texture2D* createRenderTexture();
+
+	osg::GraphicsContext::Traits* graphicsContextTraits() const;
 
 	void setControllerMatrixTransform(int eye, osg::Matrix viewMatrix);
 

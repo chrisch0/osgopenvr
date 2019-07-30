@@ -360,22 +360,32 @@ void OpenVRDevice::createRTTCamera(Eye eye, osg::ref_ptr<osg::Texture2D> &textur
 {
 	auto camera = eye == LEFT ? getLeftCamera() : getRightCamera();
 
-	camera->setViewport(0, 0, getTextureWidth(), getTextureHeight());
+	camera->setViewport(0, 0, m_textureWidth, m_textureHeight);
 	if (eye == LEFT)
-		camera->setProjectionMatrix(getProjectionMatrixLeft());
-	if (eye == LEFT)
-		camera->setProjectionMatrix(getProjectionMatrixRight());
+		camera->setProjectionMatrix(m_leftEyeProjectionMatrix);
+	if (eye == RIGHT)
+		camera->setProjectionMatrix(m_rightEyeProjectionMatrix);
 	camera->setClearColor(osg::Vec4(0.2f, 0.0f, 0.8f, 0.0f));
 	camera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	camera->setRenderOrder(osg::Camera::PRE_RENDER, eye);
 	camera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT);
 	camera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
 	camera->setUpdateCallback(new OpenVRUpdateCallback(eye, this, refPos, head));
-	//camera->setUpdateCallback(new CameraMovement(device));
 	camera->setComputeNearFarMode(osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR);
 	camera->attach(osg::Camera::COLOR_BUFFER0, texture, 0, 0, false, 4, 4);
 	camera->setFinalDrawCallback(new OpenVRSubmitFrameCallback(eye, texture, this));
 	camera->addChild(m_scene);
+}
+
+osg::Texture2D* OpenVRDevice::createRenderTexture()
+{
+	osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
+	texture->setTextureSize(m_textureWidth, m_textureHeight);
+	texture->setInternalFormat(GL_RGBA);
+	texture->setFilter(osg::Texture2D::MIN_FILTER, osg::Texture2D::LINEAR);
+	texture->setFilter(osg::Texture2D::MAG_FILTER, osg::Texture2D::LINEAR);
+
+	return texture.release();
 }
 
 void OpenVRDevice::setControllerMatrixTransform(int eye, osg::Matrix viewMatrix)
@@ -406,6 +416,54 @@ bool OpenVRDevice::hmdInitialized() const
 {
 	return m_vrSystem != nullptr && m_vrRenderModels != nullptr;
 }
+
+osg::GraphicsContext::Traits* OpenVRDevice::graphicsContextTraits() const
+{
+	osg::GraphicsContext::WindowingSystemInterface* wsi = osg::GraphicsContext::getWindowingSystemInterface();
+
+	if (!wsi)
+	{
+		osg::notify(osg::NOTICE) << "Error, no WindowSystemInterface available, cannot create windows." << std::endl;
+		return 0;
+	}
+
+	// Get the screen identifiers set in environment variable DISPLAY
+	osg::GraphicsContext::ScreenIdentifier si;
+	si.readDISPLAY();
+
+	// If displayNum has not been set, reset it to 0.
+	if (si.displayNum < 0)
+	{
+		si.displayNum = 0;
+		osg::notify(osg::INFO) << "Couldn't get display number, setting to 0" << std::endl;
+	}
+
+	// If screenNum has not been set, reset it to 0.
+	if (si.screenNum < 0)
+	{
+		si.screenNum = 0;
+		osg::notify(osg::INFO) << "Couldn't get screen number, setting to 0" << std::endl;
+	}
+
+	unsigned int width, height;
+	wsi->getScreenResolution(si, width, height);
+
+	osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits;
+	traits->hostName = si.hostName;
+	traits->screenNum = si.screenNum;
+	traits->displayNum = si.displayNum;
+	traits->windowDecoration = true;
+	traits->x = 50;
+	traits->y = 50;
+	traits->width = 800;
+	traits->height = 450;
+	traits->doubleBuffer = true;
+	traits->sharedContext = nullptr;
+	traits->vsync = false; // VSync should always be disabled for because HMD submit handles the timing of the swap.
+
+	return traits.release();
+}
+
 
 osg::Matrix OpenVRDevice::getProjectionOffsetMatrixLeft() const 
 {
